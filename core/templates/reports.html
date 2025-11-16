@@ -2,27 +2,68 @@
 {% block content %}
 
 <div class="container mt-4">
-    <h2>Reports</h2>
 
-    <h4 class="mt-4">Low Stock</h4>
+    <div class="d-flex justify-content-between align-items-center">
+        <h2>Reports</h2>
+
+        <a href="{% url 'download_report_pdf' %}" class="btn btn-danger">
+            <i class="fas fa-file-pdf me-1"></i> Download PDF
+        </a>
+    </div>
+
+    <h4 class="mt-4 text-warning">Low Stock</h4>
     <ul class="list-group mb-4">
         {% for item in low_stock %}
-        <li class="list-group-item text-danger">
-            {{ item.name }} — {{ item.quantity }}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-warning">{{ item.name }} — {{ item.quantity }}</span>
+
+            <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-outline-primary">
+                Edit
+            </a>
         </li>
         {% empty %}
-        <p class="text-muted">No low stock items</p>
+        <p class="text-muted">No low stock items.</p>
         {% endfor %}
     </ul>
 
-    <h4>Best & Worst Selling</h4>
+
+    <h4 class="text-danger">Out of Stock</h4>
+    <ul class="list-group mb-4">
+        {% for item in out_of_stock %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-danger">{{ item.name }} — {{ item.quantity }}</span>
+
+            <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-outline-primary">
+                Edit
+            </a>
+        </li>
+        {% empty %}
+        <p class="text-muted">No out of stock items.</p>
+        {% endfor %}
+    </ul>
+
+
+    <!-- BEST SELLING -->
+    <h4 class="text-success">Best Performing Products</h4>
     <ul class="list-group mb-4">
         {% for s in best_selling %}
         <li class="list-group-item">
-            {{ s.item__name }} — {{ s.total }} sold
+            {{ s.item__name }} — {{ s.total_sold }} sold
         </li>
         {% empty %}
-        <p class="text-muted">No sales data</p>
+        <p class="text-muted">No sales data.</p>
+        {% endfor %}
+    </ul>
+
+    <!-- WORST SELLING -->
+    <h4 class="text-secondary">Worst Performing Products</h4>
+    <ul class="list-group mb-4">
+        {% for w in worst_selling %}
+        <li class="list-group-item">
+            {{ w.item__name }} — {{ w.total_sold }} sold
+        </li>
+        {% empty %}
+        <p class="text-muted">No sales data.</p>
         {% endfor %}
     </ul>
 

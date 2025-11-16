@@ -90,9 +90,12 @@
                         <a href="{% url 'item_detail' item.id %}" class="btn btn-sm btn-outline-primary">
                             Edit
                         </a>
-                        <a class="btn btn-sm btn-outline-danger">
-                            Delete
-                        </a>
+                        <form action="/inventory/{{ item.id }}/delete/" method="POST" style="display:inline;">
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this item?')">
+                                Delete
+                            </button>
+                        </form>
                     </td>
                 </tr>
 

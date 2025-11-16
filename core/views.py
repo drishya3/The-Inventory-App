@@ -1,10 +1,12 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from .forms import AddItemForm
 from django.contrib.auth.models import User
 from django.contrib import messages
+from reportlab.pdfgen import canvas
+from django.http import HttpResponse
 
 from .models import Item, SalesRecord, RestockRecord, AppSettings
 from core.services.inventory import sell_item, restock_item
@@ -48,7 +50,6 @@ def signup_view(request):
     return render(request, "signup.html")
 
 
-
 @login_required
 def home(request):
     return render(request, "home.html")
@@ -68,8 +69,6 @@ def dashboard(request):
     }
 
     return render(request, "dashboard.html", context)
-
-
 
 
 @login_required
@@ -105,16 +104,37 @@ def item_detail(request, item_id):
 
     return render(request, "item_detail.html", {"item": item})
 
-
-@login_required
+@login_required()
 def reports(request):
-    low_stock = Item.objects.filter(quantity__lt=10)
-    best_selling = SalesRecord.objects.values("item__name").annotate(total=Sum("quantity_sold")).order_by("-total")
+    settings = AppSettings.objects.first()  # global settings
+    threshold = settings.low_stock_threshold if settings else 10
 
-    return render(request, "reports.html", {
+    # MUTUALLY EXCLUSIVE
+    low_stock = Item.objects.filter(quantity__gt=0, quantity__lt=threshold)
+    out_of_stock = Item.objects.filter(quantity=0)
+
+    # BEST SELLING (Top 5)
+    best_selling = (
+        SalesRecord.objects.values("item__name")
+        .annotate(total_sold=Sum("quantity_sold"))
+        .order_by("-total_sold")[:5]
+    )
+
+    # WORST SELLING (Bottom 5)
+    worst_selling = (
+        SalesRecord.objects.values("item__name")
+        .annotate(total_sold=Sum("quantity_sold"))
+        .order_by("total_sold")[:5]
+    )
+
+    context = {
         "low_stock": low_stock,
+        "out_of_stock": out_of_stock,
         "best_selling": best_selling,
-    })
+        "worst_selling": worst_selling,
+    }
+
+    return render(request, "reports.html", context)
 
 
 @login_required
@@ -181,4 +201,65 @@ def restock_stock(request, item_id):
             return render(request, "restock_stock.html", {"item": item, "error": msg})
 
     return render(request, "restock_stock.html", {"item": item})
+
+
+def download_report_pdf(request):
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="inventory_report.pdf"'
+
+    p = canvas.Canvas(response)
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, 800, "Inventory Report")
+
+    y = 770
+    p.setFont("Helvetica", 12)
+
+    # Low Stock
+    p.drawString(50, y, "Low Stock Items:")
+    y -= 20
+    low_stock = Item.objects.filter(quantity__gt=0, quantity__lt=10)
+    for item in low_stock:
+        p.drawString(70, y, f"{item.name} — {item.quantity}")
+        y -= 15
+
+    # Best Selling
+    y -= 25
+    p.drawString(50, y, "Best Performing Products:")
+    y -= 20
+    best_selling = (
+        SalesRecord.objects.values("item__name")
+        .annotate(total=Sum("quantity_sold"))
+        .order_by("-total")[:5]
+    )
+    for s in best_selling:
+        p.drawString(70, y, f"{s['item__name']} — {s['total']} sold")
+        y -= 15
+
+    # Worst Selling
+    y -= 25
+    p.drawString(50, y, "Worst Performing Products:")
+    y -= 20
+    worst_selling = (
+        SalesRecord.objects.values("item__name")
+        .annotate(total=Sum("quantity_sold"))
+        .order_by("total")[:5]
+    )
+    for w in worst_selling:
+        p.drawString(70, y, f"{w['item__name']} — {w['total']} sold")
+        y -= 15
+
+    p.showPage()
+    p.save()
+    return response
+
+
+def delete_item(request, item_id):
+    item = get_object_or_404(Item, id=item_id)
+
+    if request.method == "POST":  # Confirm delete
+        item.delete()
+        return redirect("dashboard")
+
+    # Optional confirmation page (if needed)
+    return render(request, "confirm_delete.html", {"item": item})
 
