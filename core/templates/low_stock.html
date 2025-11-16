@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2>Low Stock Items</h2>
+
+    <ul class="list-group mt-3">
+        {% for item in items %}
+        <li class="list-group-item text-danger">
+            {{ item.name }} — {{ item.quantity }} left
+        </li>
+        {% empty %}
+        <p class="text-muted">No low stock items.</p>
+        {% endfor %}
+    </ul>
+</div>
+
+{% endblock %}

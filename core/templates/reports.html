@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2>Reports</h2>
+
+    <h4 class="mt-4">Low Stock</h4>
+    <ul class="list-group mb-4">
+        {% for item in low_stock %}
+        <li class="list-group-item text-danger">
+            {{ item.name }} — {{ item.quantity }}
+        </li>
+        {% empty %}
+        <p class="text-muted">No low stock items</p>
+        {% endfor %}
+    </ul>
+
+    <h4>Best & Worst Selling</h4>
+    <ul class="list-group mb-4">
+        {% for s in best_selling %}
+        <li class="list-group-item">
+            {{ s.item__name }} — {{ s.total }} sold
+        </li>
+        {% empty %}
+        <p class="text-muted">No sales data</p>
+        {% endfor %}
+    </ul>
+
+</div>
+
+{% endblock %}

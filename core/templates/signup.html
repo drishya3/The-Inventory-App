@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-5" style="max-width: 450px;">
+    <h3 class="text-center mb-4">Create Account</h3>
+
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+
+    <form method="POST">
+        {% csrf_token %}
+
+        <label>Username</label>
+        <input class="form-control mb-3" name="username" required>
+
+        <label>Password</label>
+        <input type="password" class="form-control mb-3" name="password" required>
+
+        <label>Confirm Password</label>
+        <input type="password" class="form-control mb-3" name="password2" required>
+
+        <button class="btn btn-primary w-100">Sign Up</button>
+    </form>
+
+    <p class="text-center mt-3">
+        Already have an account? <a href="/">Log in</a>
+    </p>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-5" style="max-width: 600px;">
+    <h2>Add Item</h2>
+
+    <form method="POST" enctype="multipart/form-data" class="mt-3">
+        {% csrf_token %}
+        {{ form.as_p }}
+
+        <button class="btn btn-success mt-3">Save Item</button>
+    </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<h3>Sell Stock: {{ item.name }}</h3>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<form method="POST">
+    {% csrf_token %}
+    <label>Quantity to Sell</label>
+    <input type="number" class="form-control mb-3" name="quantity" required min="1">
+
+    <button class="btn btn-danger">Confirm Sale</button>
+</form>
+
+{% endblock %}

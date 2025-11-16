@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container mt-5">
+    <h2 class="mb-4">Home</h2>
+
+    <div class="row g-4">
+
+        <div class="col-md-3">
+            <a href="/inventory/" class="text-decoration-none">
+                <div class="card p-4 text-center card-hover">
+                    <h5>Manage Items</h5>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="/inventory/add/" class="text-decoration-none">
+                <div class="card p-4 text-center card-hover">
+                    <h5>Add Item</h5>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="/reports/" class="text-decoration-none">
+                <div class="card p-4 text-center card-hover">
+                    <h5>Reports</h5>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="/settings/" class="text-decoration-none">
+                <div class="card p-4 text-center card-hover">
+                    <h5>Settings</h5>
+                </div>
+            </a>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}

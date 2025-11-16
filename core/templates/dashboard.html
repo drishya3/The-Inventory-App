@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<!-- Page Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold">Dashboard</h2>
+
+    <div>
+        <a href="{% url 'add_item' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Add Item
+        </a>
+        <button class="btn btn-outline-secondary">
+            <i class="fas fa-filter me-1"></i> Filter
+        </button>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+
+    <div class="col-md-3">
+        <div class="card shadow-sm p-3">
+            <p class="text-muted m-0">Total Items</p>
+            <h3 class="fw-bold">{{ total_items }}</h3>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm p-3">
+            <p class="text-muted m-0">Low Stock</p>
+            <h3 class="fw-bold text-warning">{{ low_stock }}</h3>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card shadow-sm p-3">
+            <p class="text-muted m-0">Out of Stock</p>
+            <h3 class="fw-bold text-danger">{{ out_of_stock }}</h3>
+        </div>
+    </div>
+
+</div>
+
+<!-- Inventory Table -->
+<div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h5 class="mb-0">Inventory Overview</h5>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Item</th>
+                    <th>Stock</th>
+                    <th>Price</th>
+                    <th>Status</th>
+                    <th style="width: 160px;">Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>#{{ item.id }}</td>
+
+                    <td>
+                        <strong>{{ item.name }}</strong><br>
+                        <small class="text-muted">SKU: {{ item.sku }}</small>
+                    </td>
+
+                    <td>{{ item.quantity }}</td>
+
+                    <td>${{ item.price }}</td>
+
+                    <td>
+                        {% if item.quantity == 0 %}
+                            <span class="badge bg-danger">Out of Stock</span>
+                        {% elif item.quantity < 10 %}
+                            <span class="badge bg-warning">Low Stock</span>
+                        {% else %}
+                            <span class="badge bg-success">In Stock</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        <a href="{% url 'item_detail' item.id %}" class="btn btn-sm btn-outline-primary">
+                            Edit
+                        </a>
+                        <a class="btn btn-sm btn-outline-danger">
+                            Delete
+                        </a>
+                    </td>
+                </tr>
+
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        No items added yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+
+        </table>
+    </div>
+</div>
+
+{% endblock %}
