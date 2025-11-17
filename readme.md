@@ -10,7 +10,7 @@ A simple Django web application for managing inventory with features like tracki
 ## Installation
 1. Clone the repository:  
    ```bash
-   git clone https://github.com/drishya3/The-Inventory-App.git
+   git clone -b backend https://github.com/drishya3/The-Inventory-App.git
     ```
 2. Install dependencies: 
     ```bash
