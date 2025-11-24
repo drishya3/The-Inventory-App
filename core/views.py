@@ -2,11 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
+from django.db import models
 from .forms import AddItemForm
 from django.contrib.auth.models import User
 from django.contrib import messages
 from reportlab.pdfgen import canvas
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
+import json
+
 
 from .models import Item, SalesRecord, RestockRecord, AppSettings
 from core.services.inventory import sell_item, restock_item
@@ -74,9 +77,26 @@ def dashboard(request):
 
 @login_required
 def inventory_list(request):
-    query = request.GET.get("search", "")
-    items = Item.objects.filter(name__icontains=query)
+    items = Item.objects.all()
+
+    search = request.GET.get("search", "")
+    stock_filter = request.GET.get("stock", "")
+
+    if search:
+        items = items.filter(
+            models.Q(name__icontains=search) |
+            models.Q(sku__icontains=search)
+        )
+
+    if stock_filter == "low":
+        items = items.filter(quantity__gt=0, quantity__lt=10)
+    elif stock_filter == "out":
+        items = items.filter(quantity=0)
+    elif stock_filter == "in":
+        items = items.filter(quantity__gte=10)
+
     return render(request, "inventory_list.html", {"items": items})
+
 
 
 @login_required
@@ -263,4 +283,39 @@ def delete_item(request, item_id):
 
     # Optional confirmation page (if needed)
     return render(request, "confirm_delete.html", {"item": item})
+
+@login_required
+def update_inline(request, item_id):
+    data = json.loads(request.body)
+    item = Item.objects.get(id=item_id)
+
+    field = data["field"]
+    value = data["value"]
+
+    setattr(item, field, value)
+    item.save()
+
+    return JsonResponse({"status": "ok"})
+
+
+@login_required
+def batch_delete(request):
+    data = json.loads(request.body)
+    ids = data["ids"]
+    Item.objects.filter(id__in=ids).delete()
+    return JsonResponse({"status": "ok"})
+
+
+@login_required
+def batch_restock(request):
+    data = json.loads(request.body)
+    ids = data["ids"]
+    amount = int(data["amount"])
+
+    for item in Item.objects.filter(id__in=ids):
+        item.quantity += amount
+        item.save()
+        RestockRecord.objects.create(item=item, quantity_added=amount)
+
+    return JsonResponse({"status": "ok"})
 

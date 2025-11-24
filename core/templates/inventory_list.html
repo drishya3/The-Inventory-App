@@ -4,41 +4,203 @@
 <div class="container mt-4">
     <h2>Inventory</h2>
 
-    <form class="d-flex my-3">
-        <input name="search" class="form-control" placeholder="Search...">
-        <button class="btn btn-primary ms-2">Search</button>
+    <!-- Search + Filter Row -->
+    <form class="row g-2 my-3" id="searchForm">
+
+        <div class="col-md-6">
+            <input id="instantSearch" name="search" class="form-control"
+                   placeholder="Search name or SKU..."
+                   value="{{ request.GET.search }}">
+        </div>
+
+        <div class="col-md-4">
+            <select name="stock" class="form-select" id="stockFilter">
+                <option value="">-- Stock Filter --</option>
+                <option value="in" {% if request.GET.stock == "in" %}selected{% endif %}>In Stock</option>
+                <option value="low" {% if request.GET.stock == "low" %}selected{% endif %}>Low Stock</option>
+                <option value="out" {% if request.GET.stock == "out" %}selected{% endif %}>Out of Stock</option>
+            </select>
+        </div>
+
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100">Apply</button>
+        </div>
     </form>
 
-    <table class="table table-bordered table-striped mt-3">
+    <!-- Batch Operations -->
+    <div class="mb-3">
+        <button id="batchDeleteBtn" class="btn btn-danger btn-sm" disabled>Delete Selected</button>
+        <button id="batchRestockBtn" class="btn btn-success btn-sm" disabled>Restock Selected</button>
+    </div>
+
+    <table class="table table-bordered table-striped mt-3" id="inventoryTable">
         <thead>
             <tr>
-                <th>Name</th>
-                <th>SKU</th>
-                <th>Qty</th>
-                <th>Last Restock</th>
-                <th>Price</th>
-                <th></th>
+                <th><input type="checkbox" id="selectAll"></th>
+
+                <th class="sortable" data-sort="name">Name <span class="sort-arrow">⬍</span></th>
+                <th class="sortable" data-sort="sku">SKU <span class="sort-arrow">⬍</span></th>
+                <th class="sortable" data-sort="quantity">Qty <span class="sort-arrow">⬍</span></th>
+                <th class="sortable" data-sort="last_restock_date">Last Restock <span class="sort-arrow">⬍</span></th>
+                <th class="sortable" data-sort="price">Price <span class="sort-arrow">⬍</span></th>
+
+                <th style="width: 150px;">Actions</th>
             </tr>
         </thead>
 
-        <tbody>
+        <tbody id="tableBody">
             {% for item in items %}
-            <tr>
+            <tr data-name="{{ item.name|lower }}" data-sku="{{ item.sku|lower }}">
+
+                <td><input type="checkbox" class="row-checkbox" value="{{ item.id }}"></td>
+
                 <td>{{ item.name }}</td>
                 <td>{{ item.sku }}</td>
-                <td>{{ item.quantity }}</td>
+
+                <td contenteditable="true" class="editable" data-field="quantity" data-id="{{ item.id }}">{{ item.quantity }}</td>
+
                 <td>{{ item.last_restock_date }}</td>
-                <td>${{ item.price }}</td>
+
+                <td contenteditable="true" class="editable" data-field="price" data-id="{{ item.id }}">${{ item.price }}</td>
+
                 <td>
                     <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-info">View</a>
                 </td>
             </tr>
-            {% empty %}
-            <tr><td colspan="6" class="text-center">No items found.</td></tr>
             {% endfor %}
         </tbody>
 
     </table>
 </div>
+
+<style>
+    th.sortable { cursor: pointer; }
+    .sort-arrow { font-size: 0.9rem; opacity: 0.5; }
+    .editable { background: #f8f9fa; cursor: text; }
+</style>
+
+<script>
+/* ------------------------------ */
+/*  INSTANT SEARCH                */
+/* ------------------------------ */
+document.getElementById("instantSearch").addEventListener("keyup", function () {
+    let value = this.value.toLowerCase();
+    document.querySelectorAll("#tableBody tr").forEach(row => {
+        let name = row.dataset.name;
+        let sku = row.dataset.sku;
+        row.style.display = (name.includes(value) || sku.includes(value)) ? "" : "none";
+    });
+});
+
+/* ------------------------------ */
+/*  SORTING WITH ARROWS           */
+/* ------------------------------ */
+let sortStates = {}; // stores asc/desc state
+
+document.querySelectorAll(".sortable").forEach(header => {
+    header.addEventListener("click", () => {
+        let key = header.dataset.sort;
+        let arrow = header.querySelector(".sort-arrow");
+
+        if (!sortStates[key]) sortStates[key] = "asc";
+        else sortStates[key] = sortStates[key] === "asc" ? "desc" : "asc";
+
+        arrow.innerText = sortStates[key] === "asc" ? "↑" : "↓";
+
+        let rows = Array.from(document.querySelectorAll("#tableBody tr"));
+
+        rows.sort((a, b) => {
+            let A = a.children[header.cellIndex].innerText.replace("$", "");
+            let B = b.children[header.cellIndex].innerText.replace("$", "");
+
+            if (!isNaN(A) && !isNaN(B)) {
+                A = Number(A);
+                B = Number(B);
+            }
+
+            return sortStates[key] === "asc" ? A.localeCompare(B) : B.localeCompare(A);
+        });
+
+        rows.forEach(r => document.getElementById("tableBody").appendChild(r));
+    });
+});
+
+/* ------------------------------ */
+/*  IN-LINE EDITING (AJAX)       */
+/* ------------------------------ */
+document.querySelectorAll(".editable").forEach(cell => {
+    cell.addEventListener("blur", () => {
+        let id = cell.dataset.id;
+        let field = cell.dataset.field;
+        let value = cell.innerText.replace("$", "");
+
+        fetch(`/inventory/${id}/update-inline/`, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": "{{ csrf_token }}",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ field, value })
+        });
+    });
+});
+
+/* ------------------------------ */
+/*  BATCH SYSTEM                 */
+/* ------------------------------ */
+let selectAll = document.getElementById("selectAll");
+let checkboxes = document.querySelectorAll(".row-checkbox");
+let deleteBtn = document.getElementById("batchDeleteBtn");
+let restockBtn = document.getElementById("batchRestockBtn");
+
+function updateBatchButtons() {
+    let count = document.querySelectorAll(".row-checkbox:checked").length;
+    deleteBtn.disabled = count === 0;
+    restockBtn.disabled = count === 0;
+}
+
+selectAll.addEventListener("change", function () {
+    checkboxes.forEach(cb => (cb.checked = this.checked));
+    updateBatchButtons();
+});
+checkboxes.forEach(cb => cb.addEventListener("change", updateBatchButtons));
+
+/* ------------------------------ */
+/*  BATCH DELETE                 */
+/* ------------------------------ */
+deleteBtn.addEventListener("click", () => {
+    if (!confirm("Delete all selected items?")) return;
+
+    let ids = Array.from(document.querySelectorAll(".row-checkbox:checked")).map(cb => cb.value);
+
+    fetch("/inventory/batch-delete/", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ids })
+    }).then(() => location.reload());
+});
+
+/* ------------------------------ */
+/*  BATCH RESTOCK (POPUP)        */
+/* ------------------------------ */
+restockBtn.addEventListener("click", () => {
+    let amount = prompt("Enter restock amount:");
+    if (!amount || isNaN(amount)) return;
+
+    let ids = Array.from(document.querySelectorAll(".row-checkbox:checked")).map(cb => cb.value);
+
+    fetch("/inventory/batch-restock/", {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ids, amount })
+    }).then(() => location.reload());
+});
+</script>
 
 {% endblock %}
