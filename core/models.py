@@ -10,6 +10,7 @@ class Item(models.Model):
     image = models.ImageField(upload_to="items/", blank=True, null=True)
     last_restock_date = models.DateField(auto_now=True)
     expiration_date = models.DateField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} ({self.sku})"

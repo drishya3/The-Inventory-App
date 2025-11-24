@@ -1,15 +1,29 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from django.db import models
 from .forms import AddItemForm
 from django.contrib.auth.models import User
 from django.contrib import messages
-from reportlab.pdfgen import canvas
 from django.http import HttpResponse, JsonResponse
+from django.utils.timezone import now
 import json
 
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Image,
+    Table, TableStyle, PageBreak
+)
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfgen.canvas import Canvas
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from io import BytesIO
+from datetime import date, timedelta
 
 from .models import Item, SalesRecord, RestockRecord, AppSettings
 from core.services.inventory import sell_item, restock_item
@@ -127,35 +141,66 @@ def item_detail(request, item_id):
 
 @login_required()
 def reports(request):
-    settings = AppSettings.objects.first()  # global settings
+
+    # THRESHOLD
+    settings = AppSettings.objects.first()
     threshold = settings.low_stock_threshold if settings else 10
 
-    # MUTUALLY EXCLUSIVE
+    # LOW / OUT OF STOCK
     low_stock = Item.objects.filter(quantity__gt=0, quantity__lt=threshold)
     out_of_stock = Item.objects.filter(quantity=0)
 
-    # BEST SELLING (Top 5)
+    # BEST / WORST SELLING
     best_selling = (
         SalesRecord.objects.values("item__name")
         .annotate(total_sold=Sum("quantity_sold"))
         .order_by("-total_sold")[:5]
     )
 
-    # WORST SELLING (Bottom 5)
     worst_selling = (
         SalesRecord.objects.values("item__name")
         .annotate(total_sold=Sum("quantity_sold"))
         .order_by("total_sold")[:5]
     )
 
-    context = {
+    # NEW: RECENT ITEMS (last 30 days)
+    recent_items = Item.objects.filter(created_at__gte=now() - timedelta(days=30))
+
+    # NEW: RESTOCK PATTERNS
+    restock_patterns = (
+        RestockRecord.objects
+        .values('item__name')
+        .annotate(
+            total_restocked=Sum('quantity_added'),
+            restock_count=Count('id')
+        )
+        .order_by('-total_restocked')
+    )
+
+    # NEW: SALES VELOCITY (last 30 days)
+    sales_velocity = (
+        SalesRecord.objects
+        .filter(date__gte=now() - timedelta(days=30))
+        .values('item__name')
+        .annotate(
+            total_sold=Sum('quantity_sold'),
+        )
+        .order_by('-total_sold')
+    )
+
+    fast_movers = list(sales_velocity[:5])
+    slow_movers = list(sales_velocity.reverse()[:5])
+
+    return render(request, "reports.html", {
         "low_stock": low_stock,
         "out_of_stock": out_of_stock,
         "best_selling": best_selling,
         "worst_selling": worst_selling,
-    }
-
-    return render(request, "reports.html", context)
+        "recent_items": recent_items,
+        "restock_patterns": restock_patterns,
+        "fast_movers": fast_movers,
+        "slow_movers": slow_movers,
+    })
 
 
 @login_required
@@ -224,53 +269,343 @@ def restock_stock(request, item_id):
     return render(request, "restock_stock.html", {"item": item})
 
 
+# helper: add page numbers with enhanced footer
+def _add_page_number(canvas: Canvas, doc):
+    page_num = canvas.getPageNumber()
+    canvas.saveState()
+    # Footer line
+    canvas.setStrokeColor(colors.HexColor("#E0E0E0"))
+    canvas.setLineWidth(0.5)
+    canvas.line(18, 25, letter[0] - 18, 25)
+    # Page number
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(colors.HexColor("#757575"))
+    canvas.drawRightString(letter[0] - 18, 15, f"Page {page_num}")
+    # Report title in footer
+    canvas.drawString(18, 15, "Inventory Analytics Report")
+    canvas.restoreState()
+
+
+# helper: create chart image in-memory (BytesIO)
+def _make_bar_chart(list_of_pairs, title, color="#1976D2"):
+    """
+    list_of_pairs: [("Label1", value1), ("Label2", value2), ...]
+    returns: BytesIO containing PNG image
+    """
+    if not list_of_pairs:
+        buf = BytesIO()
+        plt.figure(figsize=(5, 3))
+        plt.text(0.5, 0.5, "No data available", ha="center", va="center",
+                 fontsize=12, color="#757575")
+        plt.axis("off")
+        plt.tight_layout()
+        plt.savefig(buf, format="png", dpi=150, bbox_inches='tight')
+        plt.close()
+        buf.seek(0)
+        return buf
+
+    labels, values = zip(*list_of_pairs)
+    fig, ax = plt.subplots(figsize=(5.5, 3.2))
+    bars = ax.bar(labels, values, color=color, alpha=0.85, edgecolor='white', linewidth=1.5)
+
+    # Add value labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2., height,
+                f'{int(height)}',
+                ha='center', va='bottom', fontsize=9, fontweight='bold')
+
+    ax.set_title(title, fontsize=12, fontweight='bold', pad=15)
+    ax.tick_params(axis='x', rotation=30, labelsize=9)
+    ax.tick_params(axis='y', labelsize=9)
+    ax.set_ylim(bottom=0, top=max(values) * 1.15 if values else 1)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    plt.tight_layout()
+    buf = BytesIO()
+    plt.savefig(buf, format="png", dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+# MAIN view: integrated PDF generator
+@login_required
 def download_report_pdf(request):
+    # SETTINGS & THRESHOLD
+    settings_obj = AppSettings.objects.first()
+    threshold = settings_obj.low_stock_threshold if settings_obj else 10
+
+    # DATA QUERIES
+    low_stock_qs = Item.objects.filter(quantity__gt=0, quantity__lt=threshold)
+    out_of_stock_qs = Item.objects.filter(quantity=0)
+
+    best_selling_qs = (
+        SalesRecord.objects.values("item__name")
+        .annotate(total_sold=Sum("quantity_sold"))
+        .order_by("-total_sold")[:5]
+    )
+
+    worst_selling_qs = (
+        SalesRecord.objects.values("item__name")
+        .annotate(total_sold=Sum("quantity_sold"))
+        .order_by("total_sold")[:5]
+    )
+
+    recent_items_qs = Item.objects.filter(created_at__gte=date.today() - timedelta(days=30))
+    all_items_qs = Item.objects.all().order_by("name")
+
+    # Prepare chart data
+    best_pairs = [(r["item__name"], r["total_sold"]) for r in best_selling_qs]
+    worst_pairs = [(r["item__name"], r["total_sold"]) for r in worst_selling_qs]
+
+    # Generate charts with different colors
+    best_chart_buf = _make_bar_chart(best_pairs, "Top 5 Best Selling Products", "#4CAF50")
+    worst_chart_buf = _make_bar_chart(worst_pairs, "Top 5 Worst Selling Products", "#F44336")
+
+    # Build PDF
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+                            rightMargin=40, leftMargin=40,
+                            topMargin=50, bottomMargin=40)
+
+    styles = getSampleStyleSheet()
+
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Title'],
+        fontSize=28,
+        textColor=colors.HexColor("#1976D2"),
+        spaceAfter=20,
+        fontName='Helvetica-Bold'
+    )
+
+    h2_style = ParagraphStyle(
+        'CustomH2',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=colors.HexColor("#424242"),
+        spaceAfter=12,
+        spaceBefore=8,
+        fontName='Helvetica-Bold',
+        borderWidth=0,
+        borderColor=colors.HexColor("#1976D2"),
+        borderPadding=8,
+        leftIndent=0
+    )
+
+    info_box_style = ParagraphStyle(
+        'InfoBox',
+        parent=styles['BodyText'],
+        fontSize=10,
+        textColor=colors.HexColor("#424242"),
+        leftIndent=10,
+        rightIndent=10
+    )
+
+    elements = []
+
+    # Title page with better design
+    elements.append(Spacer(1, 50))
+    elements.append(Paragraph("📊 Inventory Analytics Report", title_style))
+    elements.append(Spacer(1, 30))
+
+    # Info box with report details
+    info_data = [
+        ["Report Generated:", date.today().strftime('%B %d, %Y')],
+        ["Low Stock Threshold:", f"{threshold} units"],
+        ["Report Period:", "Last 30 days"]
+    ]
+    info_table = Table(info_data, colWidths=[140, 200])
+    info_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E3F2FD")),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#424242")),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("PADDING", (0, 0), (-1, -1), 12),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#90CAF9")),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 30))
+
+    # Summary metrics cards
+    summary_data = [
+        ["Total Items", "Low Stock Items", "Out of Stock"],
+        [str(all_items_qs.count()), str(low_stock_qs.count()), str(out_of_stock_qs.count())]
+    ]
+    summary_table = Table(summary_data, colWidths=[140, 140, 140])
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#424242")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 1), (0, 1), colors.HexColor("#E3F2FD")),
+        ("BACKGROUND", (1, 1), (1, 1), colors.HexColor("#FFF9C4")),
+        ("BACKGROUND", (2, 1), (2, 1), colors.HexColor("#FFCDD2")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (-1, 1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("FONTSIZE", (0, 1), (-1, 1), 12),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("PADDING", (0, 0), (-1, 0), 12),
+        ("PADDING", (0, 1), (-1, 1), 20),
+        ("BOX", (0, 0), (-1, -1), 1.5, colors.HexColor("#BDBDBD")),
+        ("GRID", (0, 0), (-1, -1), 1, colors.white),
+    ]))
+    elements.append(summary_table)
+    elements.append(PageBreak())
+
+    # Low stock section
+    elements.append(Paragraph("⚠️ Low Stock Alert", h2_style))
+    elements.append(Spacer(1, 10))
+
+    if low_stock_qs.exists():
+        low_stock_table = [["Item Name", "SKU", "Qty", "Last Restock"]]
+        for it in low_stock_qs:
+            low_stock_table.append([it.name, it.sku, str(it.quantity),
+                                    str(it.last_restock_date) if it.last_restock_date else "N/A"])
+        t = Table(low_stock_table, hAlign="LEFT", repeatRows=1, colWidths=[200, 100, 60, 100])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFA726")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FFF3E0")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#FFB74D")),
+            ("ALIGN", (2, 1), (2, -1), "CENTER"),
+            ("PADDING", (0, 0), (-1, -1), 10),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#FFF3E0"), colors.white]),
+        ]))
+        elements.append(t)
+    else:
+        elements.append(Paragraph("✓ No items currently low on stock", info_box_style))
+
+    elements.append(PageBreak())
+
+    # Best selling section
+    elements.append(Paragraph("🏆 Top Performing Products", h2_style))
+    elements.append(Spacer(1, 10))
+
+    if best_selling_qs.exists():
+        best_table = [["Rank", "Product Name", "Units Sold"]]
+        for idx, row in enumerate(best_selling_qs, 1):
+            best_table.append([f"#{idx}", row["item__name"], str(row["total_sold"])])
+        bt = Table(best_table, hAlign="LEFT", repeatRows=1, colWidths=[50, 280, 100])
+        bt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4CAF50")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#E8F5E9")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#81C784")),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("ALIGN", (2, 0), (2, -1), "CENTER"),
+            ("PADDING", (0, 0), (-1, -1), 10),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#E8F5E9"), colors.white]),
+        ]))
+        elements.append(bt)
+        elements.append(Spacer(1, 15))
+        elements.append(Image(best_chart_buf, width=400, height=240))
+    else:
+        elements.append(Paragraph("No sales data available", info_box_style))
+
+    elements.append(PageBreak())
+
+    # Worst selling section
+    elements.append(Paragraph("📉 Underperforming Products", h2_style))
+    elements.append(Spacer(1, 10))
+
+    if worst_selling_qs.exists():
+        worst_table = [["Rank", "Product Name", "Units Sold"]]
+        for idx, row in enumerate(worst_selling_qs, 1):
+            worst_table.append([f"#{idx}", row["item__name"], str(row["total_sold"])])
+        wt = Table(worst_table, hAlign="LEFT", repeatRows=1, colWidths=[50, 280, 100])
+        wt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F44336")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FFEBEE")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#EF5350")),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("ALIGN", (2, 0), (2, -1), "CENTER"),
+            ("PADDING", (0, 0), (-1, -1), 10),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#FFEBEE"), colors.white]),
+        ]))
+        elements.append(wt)
+        elements.append(Spacer(1, 15))
+        elements.append(Image(worst_chart_buf, width=400, height=240))
+    else:
+        elements.append(Paragraph("No sales data available", info_box_style))
+
+    elements.append(PageBreak())
+
+    # Recent items section
+    elements.append(Paragraph("🆕 Recently Added Items", h2_style))
+    elements.append(Spacer(1, 10))
+
+    if recent_items_qs.exists():
+        recent_table = [["Name", "SKU", "Qty", "Price", "Added"]]
+        for it in recent_items_qs:
+            recent_table.append([
+                it.name, it.sku, str(it.quantity),
+                f"${it.price:.2f}", it.created_at.strftime("%m/%d/%Y")
+            ])
+        rt = Table(recent_table, hAlign="LEFT", repeatRows=1, colWidths=[180, 80, 50, 70, 80])
+        rt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2196F3")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#E3F2FD")),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#64B5F6")),
+            ("ALIGN", (2, 0), (4, -1), "CENTER"),
+            ("PADDING", (0, 0), (-1, -1), 10),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#E3F2FD"), colors.white]),
+        ]))
+        elements.append(rt)
+    else:
+        elements.append(Paragraph("No items added in the last 30 days", info_box_style))
+
+    elements.append(PageBreak())
+
+    # Full inventory section
+    elements.append(Paragraph("📦 Complete Inventory", h2_style))
+    elements.append(Spacer(1, 10))
+
+    inventory_table = [["Name", "SKU", "Qty", "Price", "Restock"]]
+    for it in all_items_qs:
+        inventory_table.append([
+            it.name, it.sku, str(it.quantity),
+            f"${it.price:.2f}",
+            str(it.last_restock_date) if it.last_restock_date else "N/A"
+        ])
+    inv_t = Table(inventory_table, hAlign="LEFT", repeatRows=1, colWidths=[170, 80, 50, 70, 90])
+    inv_t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#607D8B")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 11),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#90A4AE")),
+        ("ALIGN", (2, 0), (3, -1), "CENTER"),
+        ("PADDING", (0, 0), (-1, -1), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.HexColor("#ECEFF1"), colors.white]),
+    ]))
+    elements.append(inv_t)
+
+    # Build PDF with enhanced footer
+    doc.build(elements, onFirstPage=_add_page_number, onLaterPages=_add_page_number)
+
+    pdf = buffer.getvalue()
+    buffer.close()
+
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = 'attachment; filename="inventory_report.pdf"'
-
-    p = canvas.Canvas(response)
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, 800, "Inventory Report")
-
-    y = 770
-    p.setFont("Helvetica", 12)
-
-    # Low Stock
-    p.drawString(50, y, "Low Stock Items:")
-    y -= 20
-    low_stock = Item.objects.filter(quantity__gt=0, quantity__lt=10)
-    for item in low_stock:
-        p.drawString(70, y, f"{item.name} — {item.quantity}")
-        y -= 15
-
-    # Best Selling
-    y -= 25
-    p.drawString(50, y, "Best Performing Products:")
-    y -= 20
-    best_selling = (
-        SalesRecord.objects.values("item__name")
-        .annotate(total=Sum("quantity_sold"))
-        .order_by("-total")[:5]
-    )
-    for s in best_selling:
-        p.drawString(70, y, f"{s['item__name']} — {s['total']} sold")
-        y -= 15
-
-    # Worst Selling
-    y -= 25
-    p.drawString(50, y, "Worst Performing Products:")
-    y -= 20
-    worst_selling = (
-        SalesRecord.objects.values("item__name")
-        .annotate(total=Sum("quantity_sold"))
-        .order_by("total")[:5]
-    )
-    for w in worst_selling:
-        p.drawString(70, y, f"{w['item__name']} — {w['total']} sold")
-        y -= 15
-
-    p.showPage()
-    p.save()
+    response.write(pdf)
     return response
 
 

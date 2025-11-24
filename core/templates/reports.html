@@ -4,69 +4,167 @@
 <div class="container mt-4">
 
     <div class="d-flex justify-content-between align-items-center">
-        <h2>Reports</h2>
+        <h2>Reports & Analytics</h2>
 
         <a href="{% url 'download_report_pdf' %}" class="btn btn-danger">
             <i class="fas fa-file-pdf me-1"></i> Download PDF
         </a>
     </div>
 
+
+    <!-- ========================= -->
+    <!-- NEWLY ADDED ITEMS REPORT -->
+    <!-- ========================= -->
+    <h4 class="mt-4 text-primary">Recently Added Inventory (Last 30 Days)</h4>
+    <ul class="list-group mb-4">
+        {% for item in recent_items %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>{{ item.name }}</strong>
+            <span class="text-muted">{{ item.created_at|date:"M d, Y" }}</span>
+        </li>
+        {% empty %}
+        <p class="text-muted">No recently added items.</p>
+        {% endfor %}
+    </ul>
+
+
+    <!-- ========================= -->
+    <!-- RESTOCK PATTERNS -->
+    <!-- ========================= -->
+    <h4 class="mt-4 text-info">Restocking Patterns</h4>
+    <ul class="list-group mb-4">
+        {% for r in restock_patterns %}
+        <li class="list-group-item d-flex justify-content-between">
+            <span>{{ r.item__name }}</span>
+            <span class="text-muted">
+                Restocked {{ r.restock_count }} times — {{ r.total_restocked }} units added
+            </span>
+        </li>
+        {% empty %}
+        <p class="text-muted">No restocking data found.</p>
+        {% endfor %}
+    </ul>
+
+
+    <!-- ========================= -->
+    <!-- STOCK WARNINGS -->
+    <!-- ========================= -->
     <h4 class="mt-4 text-warning">Low Stock</h4>
     <ul class="list-group mb-4">
         {% for item in low_stock %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
             <span class="text-warning">{{ item.name }} — {{ item.quantity }}</span>
-
-            <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-outline-primary">
-                Edit
-            </a>
+            <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-outline-primary">Edit</a>
         </li>
         {% empty %}
         <p class="text-muted">No low stock items.</p>
         {% endfor %}
     </ul>
 
-
     <h4 class="text-danger">Out of Stock</h4>
     <ul class="list-group mb-4">
         {% for item in out_of_stock %}
         <li class="list-group-item d-flex justify-content-between align-items-center">
             <span class="text-danger">{{ item.name }} — {{ item.quantity }}</span>
-
-            <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-outline-primary">
-                Edit
-            </a>
+            <a href="/inventory/{{ item.id }}/" class="btn btn-sm btn-outline-primary">Edit</a>
         </li>
         {% empty %}
-        <p class="text-muted">No out of stock items.</p>
+        <p class="text-muted">No out-of-stock items.</p>
         {% endfor %}
     </ul>
 
 
-    <!-- BEST SELLING -->
-    <h4 class="text-success">Best Performing Products</h4>
+    <!-- ========================= -->
+    <!-- SALES & USAGE VELOCITY -->
+    <!-- ========================= -->
+    <h4 class="mt-4 text-success">Fast-Moving Inventory (High Sales Velocity — 30 Days)</h4>
     <ul class="list-group mb-4">
-        {% for s in best_selling %}
+        {% for f in fast_movers %}
         <li class="list-group-item">
-            {{ s.item__name }} — {{ s.total_sold }} sold
+            {{ f.item__name }} — <strong>{{ f.total_sold }}</strong> sold
         </li>
         {% empty %}
-        <p class="text-muted">No sales data.</p>
+        <p class="text-muted">No recent sales.</p>
         {% endfor %}
+        <h3 class="mt-5">Best Selling Products (Graph)</h3>
+        <canvas id="bestSellingChart" width="350" height="220"></canvas>
     </ul>
 
-    <!-- WORST SELLING -->
-    <h4 class="text-secondary">Worst Performing Products</h4>
+    <h4 class="text-secondary">Slow-Moving Inventory</h4>
     <ul class="list-group mb-4">
-        {% for w in worst_selling %}
+        {% for s in slow_movers %}
         <li class="list-group-item">
-            {{ w.item__name }} — {{ w.total_sold }} sold
+            {{ s.item__name }} — <strong>{{ s.total_sold }}</strong> sold
         </li>
         {% empty %}
-        <p class="text-muted">No sales data.</p>
+        <p class="text-muted">No data available.</p>
         {% endfor %}
+        <h3 class="mt-5">Worst Selling Products (Graph)</h3>
+        <canvas id="worstSellingChart" width="350" height="220"></canvas>
     </ul>
 
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<script>
+    // BEST SELLING CHART
+    const bestLabels = [
+        {% for s in best_selling %}
+            "{{ s.item__name }}",
+        {% endfor %}
+    ];
+
+    const bestData = [
+        {% for s in best_selling %}
+            {{ s.total_sold }},
+        {% endfor %}
+    ];
+
+    new Chart(document.getElementById("bestSellingChart"), {
+        type: "bar",
+        data: {
+            labels: bestLabels,
+            datasets: [{
+                label: "Units Sold",
+                data: bestData,
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // WORST SELLING CHART
+    const worstLabels = [
+        {% for w in worst_selling %}
+            "{{ w.item__name }}",
+        {% endfor %}
+    ];
+
+    const worstData = [
+        {% for w in worst_selling %}
+            {{ w.total_sold }},
+        {% endfor %}
+    ];
+
+    new Chart(document.getElementById("worstSellingChart"), {
+        type: "bar",
+        data: {
+            labels: worstLabels,
+            datasets: [{
+                label: "Units Sold",
+                data: worstData,
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
 {% endblock %}
