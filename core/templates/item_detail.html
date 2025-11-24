@@ -1,28 +1,54 @@
 {% extends 'base.html' %}
 {% block content %}
 
-<div class="container mt-5" style="max-width: 600px;">
+<div class="container mt-5" style="max-width: 700px;">
 
-    <h2>Item Detail: {{ item.name }}</h2>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Edit Item – {{ item.name }}</h4>
+        </div>
 
-    <form method="POST" class="mt-3">
-        {% csrf_token %}
+        <div class="card-body">
+            <form method="POST">
+                {% csrf_token %}
 
-        <label>Name</label>
-        <input class="form-control mb-3" name="name" value="{{ item.name }}">
+                <div class="mb-3">
+                    <label class="form-label">Name</label>
+                    <input class="form-control" name="name" value="{{ item.name }}">
+                </div>
 
-        <label>Price</label>
-        <input class="form-control mb-3" name="price" value="{{ item.price }}">
+                <div class="mb-3">
+                    <label class="form-label">Price</label>
+                    <input class="form-control" name="price" value="{{ item.price }}">
+                </div>
 
-        <label>Quantity</label>
-        <input class="form-control mb-3" name="quantity" value="{{ item.quantity }}">
+                <div class="mb-3">
+                    <label class="form-label">Quantity</label>
+                    <input class="form-control" name="quantity" value="{{ item.quantity }}">
+                </div>
 
-        <button class="btn btn-primary">Update</button>
-    </form>
+                <button class="btn btn-primary w-100 mt-3">Update Item</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">Stock Actions</h5>
+        </div>
+        <div class="card-body text-center">
+
+            <a href="/inventory/{{ item.id }}/sell/" class="btn btn-danger w-100 mb-2">
+                Sell Stock
+            </a>
+
+            <a href="/inventory/{{ item.id }}/restock/" class="btn btn-success w-100">
+                Restock Item
+            </a>
+
+        </div>
+    </div>
 
 </div>
-    <a href="/inventory/{{ item.id }}/sell/" class="btn btn-danger mt-3">Sell Stock</a>
-    <a href="/inventory/{{ item.id }}/restock/" class="btn btn-success mt-3">Restock Item</a>
-
 
 {% endblock %}

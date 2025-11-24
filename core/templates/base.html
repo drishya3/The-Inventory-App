@@ -25,7 +25,8 @@
     {% if settings.theme == 'dark' %}navbar-dark bg-dark{% else %}navbar-light bg-light{% endif %}">
     <div class="container-fluid">
 
-        <a class="navbar-brand" href="/home/">Inventory App</a>
+        <!-- FIXED: removed invalid /home/, now uses dashboard -->
+        <a class="navbar-brand" href="{% url 'dashboard' %}">Inventory App</a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
@@ -34,21 +35,47 @@
         <div class="collapse navbar-collapse" id="navbarNav">
 
             <ul class="navbar-nav me-auto">
-                <li class="nav-item"><a class="nav-link {% if request.path == '/home/' %}active{% endif %}" href="/home/">Home</a></li>
-                <li class="nav-item"><a class="nav-link {% if request.path == '/dashboard/' %}active{% endif %}" href="/dashboard/">Dashboard</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/inventory/' in request.path and 'add' not in request.path %}active{% endif %}" href="/inventory/">Inventory</a></li>
-                <li class="nav-item"><a class="nav-link {% if '/inventory/add/' in request.path %}active{% endif %}" href="/inventory/add/">Add Item</a></li>
-                <li class="nav-item"><a class="nav-link {% if request.path == '/reports/' %}active{% endif %}" href="/reports/">Reports</a></li>
-                <li class="nav-item"><a class="nav-link {% if request.path == '/settings/' %}active{% endif %}" href="/settings/">Settings</a></li>
+
+                <!-- Dashboard -->
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/' %}active{% endif %}"
+                       href="{% url 'dashboard' %}">Dashboard</a>
+                </li>
+
+                <!-- Inventory List -->
+                <li class="nav-item">
+                    <a class="nav-link {% if '/inventory/' in request.path and '/add/' not in request.path %}active{% endif %}"
+                       href="{% url 'inventory_list' %}">Inventory</a>
+                </li>
+
+                <!-- Add Item -->
+                <li class="nav-item">
+                    <a class="nav-link {% if '/inventory/add/' in request.path %}active{% endif %}"
+                       href="{% url 'add_item' %}">Add Item</a>
+                </li>
+
+                <!-- Reports -->
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/reports/' %}active{% endif %}"
+                       href="{% url 'reports' %}">Reports</a>
+                </li>
+
+                <!-- Settings -->
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == '/settings/' %}active{% endif %}"
+                       href="{% url 'settings' %}">Settings</a>
+                </li>
+
             </ul>
 
             <span class="navbar-text me-3">
                 Hello, {{ request.user.username }}!
             </span>
 
-            <a href="/logout/" class="btn btn-outline-info btn-sm">Logout</a>
-        </div>
+            <!-- Logout (you need to add a logout URL in urls.py later) -->
+            <a href="{% url 'logout' %}" class="btn btn-outline-info btn-sm">Logout</a>
 
+        </div>
     </div>
 </nav>
 {% endif %}

@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum
 from .forms import AddItemForm
@@ -21,10 +21,15 @@ def login_view(request):
         )
         if user:
             login(request, user)
-            return redirect("home")
+            return redirect("dashboard")
         return render(request, "login.html", {"error": True})
 
     return render(request, "login.html")
+
+@login_required
+def logout_view(request):
+    logout(request)
+    return redirect("login")
 
 def signup_view(request):
     if request.method == "POST":
@@ -49,10 +54,6 @@ def signup_view(request):
 
     return render(request, "signup.html")
 
-
-@login_required
-def home(request):
-    return render(request, "home.html")
 
 @login_required()
 def dashboard(request):
