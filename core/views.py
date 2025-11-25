@@ -74,6 +74,12 @@ def signup_view(request):
     return render(request, "signup.html")
 
 
+
+@login_required
+def home(request):
+    return render(request, "home.html")
+
+
 @login_required()
 def dashboard(request):
     items = Item.objects.all()
@@ -204,6 +210,8 @@ def item_detail(request, item_id):
 @login_required()
 def reports(request):
 
+    today = date.today()
+    next_month = today + timedelta(days=30)
     # THRESHOLD
     settings = AppSettings.objects.first()
     threshold = settings.low_stock_threshold if settings else 10
@@ -225,10 +233,10 @@ def reports(request):
         .order_by("total_sold")[:5]
     )
 
-    # NEW: RECENT ITEMS (last 30 days)
+    # RECENT ITEMS (last 30 days)
     recent_items = Item.objects.filter(created_at__gte=now() - timedelta(days=30))
 
-    # NEW: RESTOCK PATTERNS
+    # RESTOCK PATTERNS
     restock_patterns = (
         RestockRecord.objects
         .values('item__name')
@@ -239,7 +247,7 @@ def reports(request):
         .order_by('-total_restocked')
     )
 
-    # NEW: SALES VELOCITY (last 30 days)
+    # SALES VELOCITY (last 30 days)
     sales_velocity = (
         SalesRecord.objects
         .filter(date__gte=now() - timedelta(days=30))
@@ -250,6 +258,12 @@ def reports(request):
         .order_by('-total_sold')
     )
 
+    # Expirations
+    expired_items = Item.objects.filter(expiration_date__lt=today)
+    expiring_soon = Item.objects.filter(
+        expiration_date__gte=today,
+        expiration_date__lte=next_month
+    )
     fast_movers = list(sales_velocity[:5])
     slow_movers = list(sales_velocity.reverse()[:5])
 
@@ -262,6 +276,8 @@ def reports(request):
         "restock_patterns": restock_patterns,
         "fast_movers": fast_movers,
         "slow_movers": slow_movers,
+        "expired_items": expired_items,
+        "expiring_soon": expiring_soon,
     })
 
 

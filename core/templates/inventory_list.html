@@ -4,7 +4,6 @@
 <div class="container mt-4">
     <h2>Inventory</h2>
 
-    <!-- Search + Filter Row -->
     <form class="row g-2 my-3" id="searchForm">
 
         <div class="col-md-6">
@@ -27,7 +26,7 @@
         </div>
     </form>
 
-    <!-- Batch Operations -->
+
     <div class="mb-3">
         <button id="batchDeleteBtn" class="btn btn-danger btn-sm" disabled>Delete Selected</button>
         <button id="batchRestockBtn" class="btn btn-success btn-sm" disabled>Restock Selected</button>
@@ -80,9 +79,6 @@
 </style>
 
 <script>
-/* ------------------------------ */
-/*  INSTANT SEARCH                */
-/* ------------------------------ */
 document.getElementById("instantSearch").addEventListener("keyup", function () {
     let value = this.value.toLowerCase();
     document.querySelectorAll("#tableBody tr").forEach(row => {
@@ -92,10 +88,7 @@ document.getElementById("instantSearch").addEventListener("keyup", function () {
     });
 });
 
-/* ------------------------------ */
-/*  SORTING WITH ARROWS           */
-/* ------------------------------ */
-let sortStates = {}; // stores asc/desc state
+let sortStates = {};
 
 document.querySelectorAll(".sortable").forEach(header => {
     header.addEventListener("click", () => {
@@ -125,9 +118,6 @@ document.querySelectorAll(".sortable").forEach(header => {
     });
 });
 
-/* ------------------------------ */
-/*  IN-LINE EDITING (AJAX)       */
-/* ------------------------------ */
 document.querySelectorAll(".editable").forEach(cell => {
     cell.addEventListener("blur", () => {
         let id = cell.dataset.id;
@@ -145,9 +135,7 @@ document.querySelectorAll(".editable").forEach(cell => {
     });
 });
 
-/* ------------------------------ */
-/*  BATCH SYSTEM                 */
-/* ------------------------------ */
+
 let selectAll = document.getElementById("selectAll");
 let checkboxes = document.querySelectorAll(".row-checkbox");
 let deleteBtn = document.getElementById("batchDeleteBtn");
@@ -165,9 +153,7 @@ selectAll.addEventListener("change", function () {
 });
 checkboxes.forEach(cb => cb.addEventListener("change", updateBatchButtons));
 
-/* ------------------------------ */
-/*  BATCH DELETE                 */
-/* ------------------------------ */
+
 deleteBtn.addEventListener("click", () => {
     if (!confirm("Delete all selected items?")) return;
 
@@ -183,9 +169,7 @@ deleteBtn.addEventListener("click", () => {
     }).then(() => location.reload());
 });
 
-/* ------------------------------ */
-/*  BATCH RESTOCK (POPUP)        */
-/* ------------------------------ */
+
 restockBtn.addEventListener("click", () => {
     let amount = prompt("Enter restock amount:");
     if (!amount || isNaN(amount)) return;

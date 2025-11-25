@@ -13,7 +13,7 @@
 
 
     <!-- ========================= -->
-    <!-- NEWLY ADDED ITEMS REPORT -->
+    <!-- RECENTLY ADDED -->
     <!-- ========================= -->
     <h4 class="mt-4 text-primary">Recently Added Inventory (Last 30 Days)</h4>
     <ul class="list-group mb-4">
@@ -26,6 +26,7 @@
         <p class="text-muted">No recently added items.</p>
         {% endfor %}
     </ul>
+
 
 
     <!-- ========================= -->
@@ -46,8 +47,39 @@
     </ul>
 
 
+
+    <!-- ===================================== -->
+    <!-- EXPIRATION REPORT (ADDED HERE) -->
+    <!-- ===================================== -->
+    <h4 class="mt-4 text-danger">Expired Items</h4>
+    <ul class="list-group mb-4">
+        {% for item in expired_items %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-danger fw-bold">{{ item.name }}</span>
+            <span class="text-muted">Expired on: {{ item.expiration_date }}</span>
+        </li>
+        {% empty %}
+        <p class="text-muted">No expired items.</p>
+        {% endfor %}
+    </ul>
+
+
+    <h4 class="mt-4 text-warning">Expiring Soon (Next 30 Days)</h4>
+    <ul class="list-group mb-4">
+        {% for item in expiring_soon %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span class="text-warning fw-bold">{{ item.name }}</span>
+            <span class="text-muted">Expires on: {{ item.expiration_date }}</span>
+        </li>
+        {% empty %}
+        <p class="text-muted">No items expiring soon.</p>
+        {% endfor %}
+    </ul>
+
+
+
     <!-- ========================= -->
-    <!-- STOCK WARNINGS -->
+    <!-- LOW STOCK -->
     <!-- ========================= -->
     <h4 class="mt-4 text-warning">Low Stock</h4>
     <ul class="list-group mb-4">
@@ -74,8 +106,9 @@
     </ul>
 
 
+
     <!-- ========================= -->
-    <!-- SALES & USAGE VELOCITY -->
+    <!-- FAST MOVERS -->
     <!-- ========================= -->
     <h4 class="mt-4 text-success">Fast-Moving Inventory (High Sales Velocity — 30 Days)</h4>
     <ul class="list-group mb-4">
@@ -90,6 +123,11 @@
         <canvas id="bestSellingChart" width="350" height="220"></canvas>
     </ul>
 
+
+
+    <!-- ========================= -->
+    <!-- SLOW MOVERS -->
+    <!-- ========================= -->
     <h4 class="text-secondary">Slow-Moving Inventory</h4>
     <ul class="list-group mb-4">
         {% for s in slow_movers %}
@@ -104,67 +142,45 @@
     </ul>
 
 </div>
+
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // BEST SELLING CHART
+    // BEST SELLING
     const bestLabels = [
-        {% for s in best_selling %}
-            "{{ s.item__name }}",
-        {% endfor %}
+        {% for s in best_selling %}"{{ s.item__name }}",{% endfor %}
     ];
-
     const bestData = [
-        {% for s in best_selling %}
-            {{ s.total_sold }},
-        {% endfor %}
+        {% for s in best_selling %}{{ s.total_sold }},{% endfor %}
     ];
 
     new Chart(document.getElementById("bestSellingChart"), {
         type: "bar",
         data: {
             labels: bestLabels,
-            datasets: [{
-                label: "Units Sold",
-                data: bestData,
-            }]
+            datasets: [{ label: "Units Sold", data: bestData }]
         },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
     });
 
-    // WORST SELLING CHART
-    const worstLabels = [
-        {% for w in worst_selling %}
-            "{{ w.item__name }}",
-        {% endfor %}
-    ];
 
+    // WORST SELLING
+    const worstLabels = [
+        {% for w in worst_selling %}"{{ w.item__name }}",{% endfor %}
+    ];
     const worstData = [
-        {% for w in worst_selling %}
-            {{ w.total_sold }},
-        {% endfor %}
+        {% for w in worst_selling %}{{ w.total_sold }},{% endfor %}
     ];
 
     new Chart(document.getElementById("worstSellingChart"), {
         type: "bar",
         data: {
             labels: worstLabels,
-            datasets: [{
-                label: "Units Sold",
-                data: worstData,
-            }]
+            datasets: [{ label: "Units Sold", data: worstData }]
         },
-        options: {
-            responsive: true,
-            scales: {
-                y: { beginAtZero: true }
-            }
-        }
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
     });
 </script>
+
 {% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+
+    <div class="text-center mb-5">
+        <h1 class="fw-bold">Inventory Management</h1>
+        <p class="text-muted">Your command center for managing items, sales, and reports</p>
+    </div>
+
+    <div class="row g-4 justify-content-center">
+
+        <div class="col-md-3">
+            <a href="{% url 'dashboard' %}" class="text-decoration-none">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body">
+                        <i class="fas fa-tachometer-alt fa-3x mb-3 text-primary"></i>
+                        <h5 class="card-title fw-bold">Dashboard</h5>
+                        <p class="card-text text-muted">Overview of stock, sales, and alerts</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="{% url 'inventory_list' %}" class="text-decoration-none">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body">
+                        <i class="fas fa-boxes fa-3x mb-3 text-success"></i>
+                        <h5 class="card-title fw-bold">Manage Items</h5>
+                        <p class="card-text text-muted">View, edit, or delete your inventory</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="{% url 'add_item' %}" class="text-decoration-none">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body">
+                        <i class="fas fa-plus fa-3x mb-3 text-warning"></i>
+                        <h5 class="card-title fw-bold">Add Item</h5>
+                        <p class="card-text text-muted">Add new products to your inventory</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="{% url 'reports' %}" class="text-decoration-none">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body">
+                        <i class="fas fa-file-alt fa-3x mb-3 text-danger"></i>
+                        <h5 class="card-title fw-bold">Reports</h5>
+                        <p class="card-text text-muted">Generate sales and stock reports</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-3">
+            <a href="{% url 'settings' %}" class="text-decoration-none">
+                <div class="card text-center shadow-sm h-100">
+                    <div class="card-body">
+                        <i class="fas fa-cogs fa-3x mb-3 text-secondary"></i>
+                        <h5 class="card-title fw-bold">Settings</h5>
+                        <p class="card-text text-muted">Configure app preferences and backup</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
