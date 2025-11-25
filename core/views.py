@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, F
 from django.db import models
 from .forms import AddItemForm
 from django.contrib.auth.models import User
@@ -9,6 +9,8 @@ from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.utils.timezone import now
 import json
+import calendar
+from decimal import Decimal
 
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Image,
@@ -23,7 +25,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from io import BytesIO
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from .models import Item, SalesRecord, RestockRecord, AppSettings
 from core.services.inventory import sell_item, restock_item
@@ -75,15 +77,75 @@ def signup_view(request):
 @login_required()
 def dashboard(request):
     items = Item.objects.all()
+    settings_obj = AppSettings.objects.first()
+    threshold = settings_obj.low_stock_threshold if settings_obj else 10
+
+    # Basic counts
+    total_items = items.count()
+    out_of_stock_count = items.filter(quantity=0).count()
+    low_stock_count = items.filter(quantity__gt=0, quantity__lt=threshold).count()
+
+    # 1) Recent Restocks (use RestockRecord, show last 6)
+    recent_restocks_qs = RestockRecord.objects.select_related("item").order_by("-date")[:6]
+
+    # 2) Monthly Restock Risk:
+    #    Estimate which items will run low by month end based on last 30 days average sales.
+    today = date.today()
+    last_day = calendar.monthrange(today.year, today.month)[1]
+    month_end = date(today.year, today.month, last_day)
+    days_left = (month_end - today).days if month_end > today else 0
+    lookback_days = 30
+    lookback_start = today - timedelta(days=lookback_days)
+
+    # Sales in the last 30 days per item
+    recent_sales = (
+        SalesRecord.objects.filter(date__gte=lookback_start)
+        .values("item")
+        .annotate(total_sold=Sum("quantity_sold"))
+    )
+    # map item_id -> total_sold
+    sales_map = {r["item"]: r["total_sold"] for r in recent_sales}
+
+    monthly_risk_items = []
+    for it in items:
+        sold_last_30 = sales_map.get(it.id, 0)
+        avg_daily = sold_last_30 / lookback_days if lookback_days > 0 else 0
+        projected_future_sales = avg_daily * days_left
+        projected_stock = it.quantity - projected_future_sales
+        if projected_stock < threshold:
+            monthly_risk_items.append({
+                "id": it.id,
+                "name": it.name,
+                "sku": it.sku,
+                "current_qty": it.quantity,
+                "projected_stock": max(0, int(projected_stock)),
+                "avg_daily": round(avg_daily, 2),
+            })
+
+    # 3) Low stock alerts (list few)
+    low_stock_qs = items.filter(quantity__gt=0, quantity__lt=threshold).order_by("quantity")[:8]
+
+    # 4) Sales/Usage Trends - small chart data (top 6 items by recent sales)
+    sales_velocity = (
+        SalesRecord.objects.filter(date__gte=lookback_start)
+        .values("item__name")
+        .annotate(total_sold=Sum("quantity_sold"))
+        .order_by("-total_sold")[:6]
+    )
+    chart_labels = [r["item__name"] for r in sales_velocity]
+    chart_values = [r["total_sold"] for r in sales_velocity]
 
     context = {
-        "total_items": items.count(),
-
-        # MUTUALLY EXCLUSIVE:
-        "out_of_stock": items.filter(quantity=0).count(),
-        "low_stock": items.filter(quantity__gt=0, quantity__lt=10).count(),
-
-        "items": items,
+        "total_items": total_items,
+        "out_of_stock": out_of_stock_count,
+        "low_stock": low_stock_count,
+        "items": items[:50],  # keep dashboard lightweight - only first 50 for overview
+        "recent_restocks": recent_restocks_qs,
+        "monthly_risk_items": monthly_risk_items,
+        "low_stock_items": low_stock_qs,
+        "sales_chart_labels": json.dumps(chart_labels),
+        "sales_chart_values": json.dumps(chart_values),
+        "low_stock_threshold": threshold,
     }
 
     return render(request, "dashboard.html", context)
@@ -654,3 +716,101 @@ def batch_restock(request):
 
     return JsonResponse({"status": "ok"})
 
+
+def serialize_value(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
+
+
+@login_required
+def backup_data(request):
+    items = Item.objects.all()
+    restocks = RestockRecord.objects.all()
+    sales = SalesRecord.objects.all()
+
+    data = {
+        "items": [
+            {k: serialize_value(v) for k, v in item.__dict__.items() if not k.startswith("_")}
+            for item in items
+        ],
+        "restocks": [
+            {k: serialize_value(v) for k, v in r.__dict__.items() if not k.startswith("_")}
+            for r in restocks
+        ],
+        "sales": [
+            {k: serialize_value(v) for k, v in s.__dict__.items() if not k.startswith("_")}
+            for s in sales
+        ],
+    }
+
+    response = HttpResponse(json.dumps(data, indent=4), content_type="application/json")
+    response["Content-Disposition"] = "attachment; filename=inventory_backup.json"
+
+    return response
+
+
+def safe_json(value):
+    if isinstance(value, Decimal):
+        return float(value)   # or str(value)
+    return value
+
+@login_required
+def restore_data(request):
+    if request.method == "POST":
+        file = request.FILES.get("backup_file")
+        if not file:
+            messages.error(request, "No file uploaded.")
+            return redirect("settings")
+
+        import json
+        from decimal import Decimal
+
+        try:
+            data = json.load(file)
+
+            # Clear existing data
+            Item.objects.all().delete()
+            SalesRecord.objects.all().delete()
+            RestockRecord.objects.all().delete()
+
+            # Restore Items
+            for item in data.get("items", []):
+                Item.objects.create(
+                    id=item["id"],
+                    name=item["name"],
+                    sku=item["sku"],
+                    quantity=item["quantity"],
+                    price=Decimal(item["price"]),  # Convert from string
+                    last_restock_date=item["last_restock_date"],
+                    expiration_date=item.get("expiration_date")
+                )
+
+            # Restore Sales
+            for s in data.get("sales", []):
+                SalesRecord.objects.create(
+                    id=s["id"],
+                    item_id=s["item_id"],
+                    quantity_sold=s["quantity_sold"],
+                    date=s["date"]
+                )
+
+            # Restore Restocks
+            for r in data.get("restocks", []):
+                RestockRecord.objects.create(
+                    id=r["id"],
+                    item_id=r["item_id"],
+                    quantity_added=r["quantity_added"],
+                    date=r["date"]
+                )
+
+            messages.success(request, "Backup restored successfully!")
+            return redirect("settings")
+
+        except Exception as e:
+            messages.error(request, f"Error restoring backup: {e}")
+            return redirect("settings")
+
+    return redirect("settings")

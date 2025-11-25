@@ -2,6 +2,45 @@
 {% load static %}
 {% block content %}
 
+<style>
+    /* Graph Wrapper */
+    .chart-container-fixed {
+        width: 260px !important;
+        height: 160px !important;
+        max-width: 260px;
+        max-height: 160px;
+
+        /* Ensures it stays small */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+
+        margin: 0 auto; /* center the graph */
+        padding: 5px;
+
+        position: relative;
+
+        /* Optional: card-like appearance */
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Canvas itself */
+    #salesTrendChart,
+    #bestSellingChart,
+    #worstSellingChart {
+        width: 250px !important;
+        height: 150px !important;
+
+        max-width: 250px !important;
+        max-height: 150px !important;
+
+        display: block !important;
+    }
+</style>
+
+
 <!-- Page Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold">Dashboard</h2>
@@ -37,76 +76,177 @@
         </div>
     </div>
 
-</div>
-
-<!-- Inventory Table -->
-<div class="card shadow-sm">
-    <div class="card-header bg-white">
-        <h5 class="mb-0">Inventory Overview</h5>
+    <!-- Small Sales Trend Chart -->
+    <div class="col-md-3">
+        <div class="card shadow-sm p-3">
+            <p class="text-muted m-0">Sales (last 30 days)</p>
+            <div class="chart-container-fixed">
+                <canvas id="salesTrendChart"></canvas>
+            </div>
+        </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover align-middle">
+</div>
 
-            <thead class="table-light">
-                <tr>
-                    <th>ID</th>
-                    <th>Item</th>
-                    <th>Stock</th>
-                    <th>Price</th>
-                    <th>Status</th>
-                    <th style="width: 160px;">Actions</th>
-                </tr>
-            </thead>
+<div class="row">
 
-            <tbody>
-                {% for item in items %}
-                <tr>
-                    <td>#{{ item.id }}</td>
+    <!-- Left column: inventory table -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Inventory Overview</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Item</th>
+                            <th>Stock</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th style="width: 160px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>#{{ item.id }}</td>
+                            <td>
+                                <strong>{{ item.name }}</strong><br>
+                                <small class="text-muted">SKU: {{ item.sku }}</small>
+                            </td>
+                            <td>{{ item.quantity }}</td>
+                            <td>${{ item.price }}</td>
+                            <td>
+                                {% if item.quantity == 0 %}
+                                    <span class="badge bg-danger">Out of Stock</span>
+                                {% elif item.quantity < low_stock_threshold %}
+                                    <span class="badge bg-warning">Low Stock</span>
+                                {% else %}
+                                    <span class="badge bg-success">In Stock</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'item_detail' item.id %}" class="btn btn-sm btn-outline-primary">
+                                    Edit
+                                </a>
+                                <form action="/inventory/{{ item.id }}/delete/" method="POST" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this item?')">
+                                        Delete
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">
+                                No items added yet.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-                    <td>
-                        <strong>{{ item.name }}</strong><br>
-                        <small class="text-muted">SKU: {{ item.sku }}</small>
-                    </td>
+    <!-- Right column: widgets -->
+    <div class="col-lg-4">
 
-                    <td>{{ item.quantity }}</td>
-
-                    <td>${{ item.price }}</td>
-
-                    <td>
-                        {% if item.quantity == 0 %}
-                            <span class="badge bg-danger">Out of Stock</span>
-                        {% elif item.quantity < 10 %}
-                            <span class="badge bg-warning">Low Stock</span>
-                        {% else %}
-                            <span class="badge bg-success">In Stock</span>
-                        {% endif %}
-                    </td>
-
-                    <td>
-                        <a href="{% url 'item_detail' item.id %}" class="btn btn-sm btn-outline-primary">
-                            Edit
-                        </a>
-                        <form action="/inventory/{{ item.id }}/delete/" method="POST" style="display:inline;">
-                            {% csrf_token %}
-                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this item?')">
-                                Delete
-                            </button>
-                        </form>
-                    </td>
-                </tr>
-
+        <!-- Recent Restocks -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <strong>Recent Restocks</strong>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for r in recent_restocks %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold">{{ r.item.name }}</div>
+                        <small class="text-muted">+{{ r.quantity_added }} — {{ r.date }}</small>
+                    </div>
+                    <a href="{% url 'item_detail' r.item.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                </li>
                 {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted py-4">
-                        No items added yet.
-                    </td>
-                </tr>
+                <li class="list-group-item text-muted">No recent restocks.</li>
                 {% endfor %}
-            </tbody>
+            </ul>
+        </div>
 
-        </table>
+        <!-- Monthly Restock Risk -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <strong>At-Risk by Month End</strong>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for it in monthly_risk_items %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="fw-bold">{{ it.name }}</div>
+                            <small class="text-muted">SKU: {{ it.sku }} — avg/day: {{ it.avg_daily }}</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="text-danger fw-bold">{{ it.projected_stock }}</div>
+                            <small class="text-muted">proj</small>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="list-group-item text-muted">No items predicted to run low.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Low Stock Alerts -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <strong>Low Stock Alerts</strong>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for it in low_stock_items %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold">{{ it.name }}</div>
+                        <small class="text-muted">SKU: {{ it.sku }}</small>
+                    </div>
+                    <div class="text-warning fw-bold">{{ it.quantity }}</div>
+                </li>
+                {% empty %}
+                <li class="list-group-item text-muted">No low stock alerts.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
     </div>
 </div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const labels = {{ sales_chart_labels|safe }};
+    const values = {{ sales_chart_values|safe }};
+
+    const ctx = document.getElementById('salesTrendChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Units sold (last 30d)',
+                data: values,
+                backgroundColor: 'rgba(25,118,210,0.8)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+            plugins: { legend: { display: false } }
+        }
+    });
+</script>
 
 {% endblock %}
