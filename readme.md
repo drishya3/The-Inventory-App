@@ -73,7 +73,6 @@ Automatically generated PDF includes:
 * Top 5 worst-selling products (table + chart)
 * Low stock summary
 * Full inventory table (with SKU, stock, price, last restock)
-* Professional layout
 
 ---
 
@@ -88,10 +87,10 @@ Automatically generated PDF includes:
 ## 🛠️ **Technology Stack**
 
 | Layer         | Technology             |
-| ------------- | ---------------------- |
+| ------------- |------------------------|
 | Backend       | Django (Python)        |
 | Frontend      | HTML, CSS, Bootstrap 5 |
-| Charts        | Chart.js               |
+| Charts        | Chart.js, Matplotlib   |
 | Database      | SQLite (default)       |
 | PDF Generator | ReportLab              |
 | Images        | Django ImageField      |
@@ -156,7 +155,6 @@ core/
 │── urls.py          # Routing
 │── forms.py         # Add item form
 │── templates/       # HTML templates
-│── static/          # JS + CSS
 ```
 
 ---
