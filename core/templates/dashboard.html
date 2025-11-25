@@ -3,30 +3,27 @@
 {% block content %}
 
 <style>
-    /* Graph Wrapper */
     .chart-container-fixed {
         width: 260px !important;
         height: 160px !important;
         max-width: 260px;
         max-height: 160px;
 
-        /* Ensures it stays small */
+
         display: flex;
         justify-content: center;
         align-items: center;
 
-        margin: 0 auto; /* center the graph */
+        margin: 0 auto;
         padding: 5px;
 
         position: relative;
 
-        /* Optional: card-like appearance */
         background: #ffffff;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
-    /* Canvas itself */
     #salesTrendChart,
     #bestSellingChart,
     #worstSellingChart {
@@ -41,7 +38,6 @@
 </style>
 
 
-<!-- Page Header -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold">Dashboard</h2>
 
@@ -52,7 +48,6 @@
     </div>
 </div>
 
-<!-- Stats Cards -->
 <div class="row g-4 mb-4">
 
     <div class="col-md-3">
@@ -76,7 +71,6 @@
         </div>
     </div>
 
-    <!-- Small Sales Trend Chart -->
     <div class="col-md-3">
         <div class="card shadow-sm p-3">
             <p class="text-muted m-0">Sales (last 30 days)</p>
@@ -90,7 +84,6 @@
 
 <div class="row">
 
-    <!-- Left column: inventory table -->
     <div class="col-lg-8">
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white">
@@ -152,10 +145,9 @@
         </div>
     </div>
 
-    <!-- Right column: widgets -->
     <div class="col-lg-4">
 
-        <!-- Recent Restocks -->
+
         <div class="card shadow-sm mb-4">
             <div class="card-header">
                 <strong>Recent Restocks</strong>
@@ -200,7 +192,7 @@
             </div>
         </div>
 
-        <!-- Low Stock Alerts -->
+
         <div class="card shadow-sm mb-4">
             <div class="card-header">
                 <strong>Low Stock Alerts</strong>
@@ -223,7 +215,7 @@
     </div>
 </div>
 
-<!-- Chart.js -->
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     const labels = {{ sales_chart_labels|safe }};

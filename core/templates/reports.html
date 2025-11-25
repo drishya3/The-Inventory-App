@@ -12,9 +12,7 @@
     </div>
 
 
-    <!-- ========================= -->
-    <!-- RECENTLY ADDED -->
-    <!-- ========================= -->
+
     <h4 class="mt-4 text-primary">Recently Added Inventory (Last 30 Days)</h4>
     <ul class="list-group mb-4">
         {% for item in recent_items %}
@@ -29,9 +27,6 @@
 
 
 
-    <!-- ========================= -->
-    <!-- RESTOCK PATTERNS -->
-    <!-- ========================= -->
     <h4 class="mt-4 text-info">Restocking Patterns</h4>
     <ul class="list-group mb-4">
         {% for r in restock_patterns %}
@@ -48,9 +43,7 @@
 
 
 
-    <!-- ===================================== -->
-    <!-- EXPIRATION REPORT (ADDED HERE) -->
-    <!-- ===================================== -->
+
     <h4 class="mt-4 text-danger">Expired Items</h4>
     <ul class="list-group mb-4">
         {% for item in expired_items %}
@@ -78,9 +71,7 @@
 
 
 
-    <!-- ========================= -->
-    <!-- LOW STOCK -->
-    <!-- ========================= -->
+
     <h4 class="mt-4 text-warning">Low Stock</h4>
     <ul class="list-group mb-4">
         {% for item in low_stock %}
@@ -107,9 +98,7 @@
 
 
 
-    <!-- ========================= -->
-    <!-- FAST MOVERS -->
-    <!-- ========================= -->
+
     <h4 class="mt-4 text-success">Fast-Moving Inventory (High Sales Velocity — 30 Days)</h4>
     <ul class="list-group mb-4">
         {% for f in fast_movers %}
@@ -125,9 +114,6 @@
 
 
 
-    <!-- ========================= -->
-    <!-- SLOW MOVERS -->
-    <!-- ========================= -->
     <h4 class="text-secondary">Slow-Moving Inventory</h4>
     <ul class="list-group mb-4">
         {% for s in slow_movers %}
@@ -147,7 +133,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // BEST SELLING
     const bestLabels = [
         {% for s in best_selling %}"{{ s.item__name }}",{% endfor %}
     ];
@@ -165,7 +150,6 @@
     });
 
 
-    // WORST SELLING
     const worstLabels = [
         {% for w in worst_selling %}"{{ w.item__name }}",{% endfor %}
     ];
